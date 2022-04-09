@@ -1,0 +1,95 @@
+	Split the Dump Files into multiple files and in multiple directories.
+	You can set filesize parameter limits for the dump file size using below command.
+
+[FILESIZE=integer[B | K | M | G] where B is bytes, K is KB, M is MB and G is GB]
+
+Here we are taking the example on Schema level only, but we can do that on Full DB , TS level and Table as well.
+************************************************************************************************
+Step.1:
+	So we have to create firstly two directories on those mount point and also create them on a logical level.
+
+grant create any directory to system;
+
+Directory_1
+create or replace directory dir_1 as '/home/oracle/Desktop/dir_1';
+!mkdir /home/oracle/Desktop/dir_1
+
+Directory_2
+create or replace directory dir_2 as '/u01/app/dir_2';
+!mkdir /u01/app/dir_2
+
+desc dba_directories;
+
+col owner for a10
+col directory_name for a20
+col directory_path for a50
+
+set line 300
+
+select OWNER, DIRECTORY_NAME, DIRECTORY_PATH from dba_directories;
+
+OWNER	   DIRECTORY_NAME		  DIRECTORY_PATH
+---------- ------------------------------ --------------------------------------------------
+SYS	   DIR_2			  /home/oracle/Desktop/dir_2
+SYS	   DIR_1			  /home/oracle/Desktop/dir_1
+
+drop directory dir_3;
+
+****************************************
+Step.2:
+	Check the schema size.
+
+SELECT sum(bytes)/1024/1024/1024 as "Size in GB" from dba_segments WHERE owner = UPPER('&schema_name'); 
+
+Enter value for schema_name: soe
+old   1: SELECT sum(bytes)/1024/1024/1024 as "Size in GB" from dba_segments WHERE owner = UPPER('&schema_name')
+new   1: SELECT sum(bytes)/1024/1024/1024 as "Size in GB" from dba_segments WHERE owner = UPPER('soe')
+
+Size in GB
+----------
+ 2.9105835			<<<== my case size is very low
+
+****************************************
+Step.3:
+	Start doing export wihtout mentioning the "directory" keyword.
+
+	expdp system/sys schemas="soe" dumpfile=dir_1:soe_%U.dmp, dir_2:soe_%U.dmp logfile=expdpSOE_schm.log  filesize=10M
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+NOTE: We have not mention the parameter "DIRECTORY" because we have create two directories at different mount points, so we have just mention the physical directory (dir_1,dir_2) names with the keyword '%U' to create the pieces of export dumpfile and each file size have '10M'.
+Keep in Mind:
+	This method is not creating a replica of the export files, it will divided the export total file size in two different directory and each directory size will be equal.
+	At the time of import we have to mention the same directories.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+OUTPUT:
+
+	Master table "SYSTEM"."SYS_EXPORT_SCHEMA_01" successfully loaded/unloaded
+******************************************************************************
+Dump file set for SYSTEM.SYS_EXPORT_SCHEMA_01 is:
+  /home/oracle/Desktop/dir_1/soe_01.dmp
+  /home/oracle/Desktop/dir_2/soe_01.dmp
+  /home/oracle/Desktop/dir_1/soe_02.dmp
+  /home/oracle/Desktop/dir_2/soe_02.dmp
+  /home/oracle/Desktop/dir_1/soe_03.dmp
+  /home/oracle/Desktop/dir_2/soe_03.dmp
+  /home/oracle/Desktop/dir_1/soe_04.dmp
+  /home/oracle/Desktop/dir_2/soe_04.dmp
+  /home/oracle/Desktop/dir_1/soe_05.dmp
+  /home/oracle/Desktop/dir_2/soe_05.dmp
+.
+.
+.
+.
+.
+ /home/oracle/Desktop/dir_2/soe_41.dmp
+  /home/oracle/Desktop/dir_1/soe_42.dmp
+Job "SYSTEM"."SYS_EXPORT_SCHEMA_01" successfully completed at Tue Dec 17 10:05:58 2019 elapsed 0 00:02:45
+
+****************************************
+While importing:
+		Just mention the directory location of all mount points at your target location.
+	
+	impdp system/sys schemas="soe" dumpfile=dir_1:soe_%U.dmp, dir_2:soe_%U.dmp logfile=impdpSOE_schm.log  filesize=10M
+
+NOTE: Don't merge the export files(pieces) while importing in a single folder, else it will get overwrite due to same name.

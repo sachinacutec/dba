@@ -1,0 +1,116 @@
+Managing Space in Tablespaces
+
+Tablespaces allocate space in extents. Tablespaces can use two different methods to keep track of their free and used space:
+
+    Locally managed tablespaces: Extent management by the tablespace
+    Dictionary managed tablespaces: Extent management by the data dictionary
+
+When you create a tablespace, you choose one of these methods of space management. You cannot alter the method at a later time.
+
+Note:
+
+If you do not specify extent management when you create a tablespace, then the default is locally managed.
+
+Locally Managed Tablespaces (LMTs) are all about managing EXTENTS.
+
+A tablespace that manages its own extents maintains a bitmap in each datafile to keep track of the free or used status of blocks in that datafile. Each bit in the bitmap corresponds to a block or a group of blocks. When an extent is allocated or freed for reuse, Oracle changes the bitmap values to show the new status of the blocks. These changes do not generate rollback information because they do not update tables in the data dictionary (except for special cases such as tablespace quota information).
+
+Locally managed tablespaces have the following advantages over dictionary managed tablespaces:
+
+    Local management of extents automatically tracks adjacent free space, eliminating the need to coalesce free extents.
+    Local management of extents avoids recursive space management operations. Such recursive operations can occur in dictionary managed tablespaces if consuming or releasing space in an extent results in another operation that consumes or releases space in a data dictionary table or rollback segment.
+
+The sizes of extents that are managed locally can be determined automatically by the system. Alternatively, all extents can have the same size in a locally managed tablespace and override object storage options.
+
+The LOCAL clause of the CREATE TABLESPACE or CREATE TEMPORARY TABLESPACE statement is specified to create locally managed permanent or temporary tablespaces, respectively.
+Segment Space Management in Locally Managed Tablespaces
+
+When you create a locally managed tablespace using the CREATE TABLESPACE statement, the SEGMENT SPACE MANAGEMENT clause lets you specify how free and used space within a segment is to be managed. Your choices are:
+
+    AUTO
+
+    This keyword tells Oracle that you want to use bitmaps to manage the free space within segments. A bitmap, in this case, is a map that describes the status of each data block within a segment with respect to the amount of space in the block available for inserting rows. As more or less space becomes available in a data block, its new state is reflected in the bitmap. Bitmaps enable Oracle to manage free space more automatically; thus, this form of space management is called automatic segment-space management.
+    MANUAL
+
+    This keyword tells Oracle that you want to use free lists for managing free space within segments. Free lists are lists of data blocks that have space available for inserting rows. MANUAL is the default.
+    See Also:
+        Oracle9i SQL Reference for details about SQL statements
+        Oracle9i Database Administrator's Guide for more information about managing SQL statements
+        "Determine the Number and Size of Extents"
+        "Temporary Tablespaces for Sort Operations" for more information about temporary tablespaces
+
+
+	select TABLESPACE_NAME, EXTENT_MANAGEMENT, SEGMENT_SPACE_MANAGEMENT, ALLOCATION_TYPE from dba_tablespaces;
+
+TABLESPACE_NAME 	       EXTENT_MAN SEGMEN ALLOCATIO
+------------------------------ ---------- ------ ---------
+SYSTEM			       LOCAL	  MANUAL SYSTEM
+SYSAUX			       LOCAL	  AUTO	 SYSTEM
+UNDOTBS1		       LOCAL	  MANUAL SYSTEM
+TEMP			       LOCAL	  MANUAL UNIFORM
+USERS			       LOCAL	  AUTO	 SYSTEM
+
+
+6 rows selected.
+
+NOTE: We can't convert the SYSTEM/UNIFORM (allocation_type) tablespace from locally managed back to dictionary managed. If, for whatever reason, we have to go back to creating dictionary-managed tablespaces, we would essentially have to create another database with SYSTEM as dictionary-managed and use export/import to move your data over. We can't go back to creating dictionary-managed tablespaces once SYSTEM has been converted to locally managed.
+***************************************************************************************************
+
+Dictionary Managed Tablespaces:
+
+If you created your database with an earlier version of Oracle, then you could be using dictionary managed tablespaces. For a tablespace that uses the data dictionary to manage its extents, Oracle updates the appropriate tables in the data dictionary whenever an extent is allocated or freed for reuse. Oracle also stores rollback information about each update of the dictionary tables. Because dictionary tables and rollback segments are part of the database, the space that they occupy is subject to the same space management operations as all other data.
+
+
+create tablespace duc01 datafile '/u01/app/oracle/oradata/ORCL/datafile/duc02.dbf' size 10M 
+     extent management dictionary;
+
+create tablespace DMT_DUC datafile '/u01/app/oracle/oradata/ORCL/datafile/dmt_duc01.dbf' size 100M
+*
+ERROR at line 1:
+ORA-12913: Cannot create dictionary managed tablespace
+
+
+******************************
+What is  automatic segment space management (ASSM) ?
+
+	The ASSM tablespace is implemented by adding the SEGMENT SPACE MANAGEMENT AUTO clause to the tablespace definition syntax. ASSM tablespaces automate freelist management by replacing the traditional one-way linked-list freelists with bitmap freelists, and remove the ability to specify PCTUSED, FREELISTS, and FREELIST GROUPS storage parameters for individual tables and indexes.
+
+	CREATE TABLESPACE duc DATAFILE '/u01/duc01.dbf' size 10M SEGMENT SPACE MANAGEMENT MANUAL;
+
+ 	select TABLESPACE_NAME, EXTENT_MANAGEMENT, SEGMENT_SPACE_MANAGEMENT, ALLOCATION_TYPE from dba_tablespaces;
+
+TABLESPACE_NAME 	       EXTENT_MAN SEGMEN ALLOCATIO
+------------------------------ ---------- ------ ---------
+SYSTEM			       LOCAL	  MANUAL SYSTEM
+SYSAUX			       LOCAL	  AUTO	 SYSTEM
+UNDOTBS1		       LOCAL	  MANUAL SYSTEM
+TEMP			       LOCAL	  MANUAL UNIFORM
+USERS			       LOCAL	  AUTO	 SYSTEM
+DUC			       LOCAL	  MANUAL SYSTEM
+
+6 rows selected.
+
+
+create user ram identified by ram default tablespace duc quota unlimited on duc;
+grant connect, resource to ram;
+grant all on hr.employees to ram;
+
+conn ram/ram
+
+create table dup_emp as select * from hr.employees;
+
+conn / as sysdba
+
+col segment_name for a20
+
+select segment_name, segment_type,SEGMENT_SUBTYPE  from dba_segments where segment_name ='DUP_EMP';
+
+SEGMENT_NAME	     SEGMENT_TYPE	SEGMENT_SUBTYPE
+-------------------- ------------------ ----------
+DUP_EMP 	     TABLE		MSSM
+
+******************************
+What is manual segment space management (MSSM)?
+	The legacy manual segment space management (MSSM) method uses a linked list called a free list to manage free space in the segment.
+
+For a database object that has free space, a free list keeps track of blocks under the high water mark (HWM) (HWM), which is the dividing line between segment space that is used and not yet used. As blocks are used, the database puts blocks on or removes blocks from the free list as needed.

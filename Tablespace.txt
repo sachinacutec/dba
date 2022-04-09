@@ -1,0 +1,737 @@
+Must read:
+	https://docs.oracle.com/cd/E18283_01/server.112/e17110/limits002.htm#
+
+https://docs.oracle.com/cd/B19306_01/server.102/b14220/logical.htm
+
+SQL> /* MANAGING STORAGE STRUCTURE
+		TABLESPACE :- ORACLE USE TABLESPACE TO STORE DATA.
+TABLESPACE:-Oracle stores Object data logically in tablespaces and physically in datafiles. Oracle databases are logically divided into one or more tablespaces and each Tablespace is made up of one or more physical datafiles. So Oracle use Tablespace to store schema Objects.
+
+WHY TABLESPACE? 
+Tablespaces perform a number of key functions in an Oracle database, but the concept of a tablespace is not common to all relational databases. For instance, the Microsoft SQL Server database doesn’t use this concept at all.
+	Brief list of the benefits of using tablespaces:
+• Tablespaces make it easier to allocate space quotas to various users in the database.
+• Tablespaces enable you to perform partial backups and recoveries based on the tablespace as a unit.
+• Because a large object like a data warehouse partitioned table can be spread over several tablespaces, you can increase performance by spanning the tablespace over several disks and controllers.
+• You can take a tablespace offline without having to bring down the entire database.
+• Tablespaces are an easy way to allocate database space.
+• You can import or export specific application data by using the import and export utilities at the tablespace level.
+
+
+SQL> */
+SQL> 
+SQL> CREATE TABLE T1(ID INT);
+
+Table created.
+
+SQL> INSERT INTO T1 VALUES(1);
+
+1 row created.
+
+SQL> COMMIT;
+
+Commit complete.
+
+SQL> SHOW USER
+USER is "SYS"
+SQL> 
+SQL> SELECT TABLESPACE_NAME,TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME='T1';
+SELECT TABLESPACE_NAME,TABLE_NAME FROM DBA_TABLES WHERE TABLE_NAME='T1';
+SELECT TABLESPACE_NAME,TABLE_NAME FROM all_TABLES WHERE TABLE_NAME='T1';
+
+TABLESPACE 	TABLE_NAME
+---------- 	----------
+SYSTEM	   T1
+                                                                         
+
+
+SQL> DESC V$TABLESPACE
+ Name                                      Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ TS#                                                NUMBER
+ NAME                                               VARCHAR2(30)
+ INCLUDED_IN_DATABASE_BACKUP                        VARCHAR2(3)
+ BIGFILE                                            VARCHAR2(3)
+ FLASHBACK_ON                                       VARCHAR2(3)
+ ENCRYPT_IN_BACKUP                                  VARCHAR2(3)
+
+SQL> SELECT * FROM V$TABLESPACE;
+
+       TS# NAME                           INC BIG FLA ENC                       
+---------- ------------------------------ --- --- --- ---                       
+         0 SYSTEM                         YES NO  YES                           
+         1 SYSAUX                         YES NO  YES                           
+         2 UNDOTBS1                       YES NO  YES                           
+         4 USERS                          YES NO  YES                           
+         3 TEMP                           NO  NO  YES                         
+
+6 rows selected.
+
+SQL> DESC DBA_DATA_FILES
+ Name                                      Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ FILE_NAME                                          VARCHAR2(513)
+ FILE_ID                                            NUMBER
+ TABLESPACE_NAME                                    VARCHAR2(30)
+ BYTES                       	                     NUMBER
+ BLOCKS                                             NUMBER
+ STATUS                                             VARCHAR2(9)
+ RELATIVE_FNO                                       NUMBER
+ AUTOEXTENSIBLE                                     VARCHAR2(3)
+ MAXBYTES                                           NUMBER
+ MAXBLOCKS                                          NUMBER
+ INCREMENT_BY                                       NUMBER
+ USER_BYTES                                         NUMBER
+ USER_BLOCKS                                        NUMBER
+ ONLINE_STATUS                                      VARCHAR2(7)
+
+COL FILE_NAME FOR A45
+COL TABLESPACE_NAME FOR A13
+set line 300
+
+SELECT TABLESPACE_NAME,FILE_NAME,BYTES/1024/1024 CURR_SIZE_MB,MAXBYTES/1024/1024/1024 MAX_SIZE_GB FROM DBA_DATA_FILES;
+
+TABLESPACE_NA FILE_NAME 				    CURR_SIZE_MB 										MAX_SIZE_GB
+------------- --------------------------------------------- ------------ -----------
+SYSTEM	      /u01/app/oracle/oradata/oradb/system01.dbf	890  31.9999847
+SYSAUX	      /u01/app/oracle/oradata/oradb/sysaux01.dbf	690  31.9999847
+USERS	      /u01/app/oracle/oradata/oradb/users01.dbf 	5  31.9999847
+UNDOTBS1      /u01/app/oracle/oradata/oradb/undotbs01.dbf	225  31.9999847
+
+
+                     
+
+SQL> desc DBA_FREE_SPACE
+ Name					   Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ TABLESPACE_NAME				    VARCHAR2(30)
+ FILE_ID					    NUMBER
+ BLOCK_ID					    NUMBER
+ BYTES						    NUMBER
+ BLOCKS 					    NUMBER
+ RELATIVE_FNO					    NUMBER
+
+
+	SELECT TABLESPACE_NAME,ROUND(SUM(BYTES)/1024/1024) AS FREE_MB FROM DBA_FREE_SPACE GROUP BY TABLESPACE_NAME;
+
+TABLESPACE_NA	 FREE_MB
+------------- ----------
+SYSAUX		      29
+UNDOTBS1	      50
+USERS		       4
+SYSTEM		       3
+
+
+NOTE: dba_free_space is a VIEW.
+
+SQL> SELECT * FROM DBA_TABLESPACE_USAGE_METRICS;
+
+TABLESPACE_NAME 	       USED_SPACE TABLESPACE_SIZE USED_PERCENT
+------------------------------ ---------- --------------- ------------
+SYSAUX				    57888	  3471230   1.66765095
+SYSTEM				   103112	  3513470    2.9347625
+TEMP				      256	  3413914   .007498724
+USERS				      128	  3410430   .003753192
+
+
+
+SQL> /* TABLESPACE TYPE:-
+> 		1) PERMANENT TABLESPACE :- Used to store Object data.
+SQL> 			a) SMALLFILE TABLESPACE
+SQL> 			b) BIGFILE TABLESPACE  ---> FROM 10G
+						(8kb Default)		
+Block_Size		(kb)	2	4	8	16	32
+small_file_size	(GB)	8	16	32	64	128	
+Big_file_size	(TB)	8	16	32	64	128
+				
+NOTE: 
+a) Default the block size will be at 8kb(8192 Bytes), so the by default size of small file is 32GB and bigfile size will be 32TB, however tablespace file size will varies as per the block size.
+b) In the case of big file tablespace, we can create only single datafile.
+
+/* 	1 KB = 1000 Bytes (in decimal)
+	1 KB = 1024 Bytes (in binary)
+*/
+
+2) UNDO TABLESPACE   :- Used to Support ROLLBACK, READ CONSISTENCY, FLASHBACK
+3) TEMPORARY TABLESPACE :- Used to Support Temp data work(like GTT users) and sorting on the memory.
+
+
+SQL> 
+SQL> /* PERMANENT TABLESPACE --> SMALLFILE TABLESPACE  */
+SQL> 
+SQL> CREATE TABLESPACE yellow DATAFILE '/u01/yellow01.dbf' size 5m, '/u01/app/yellow02.dbf'  size 5m;
+
+Tablespace created.
+
+SELECT TABLESPACE_NAME, BYTES/1024/1024 ORG_SIZE_MB, MAXBYTES/1024/1024/1024 MAX_SIZE_GB, FILE_NAME FROM DBA_DATA_FILES;
+
+TABLESPACE_NA ORG_SIZE_MB MAX_SIZE_GB FILE_NAME
+------------- ----------- ----------- ---------------------------------------------
+SYSTEM		      890  31.9999847 /u01/app/oracle/oradata/oradb/system01.dbf
+SYSAUX		      690  31.9999847 /u01/app/oracle/oradata/oradb/sysaux01.dbf
+UNDOTBS1	      225  31.9999847 /u01/app/oracle/oradata/oradb/undotbs01.dbf
+USERS			5  31.9999847 /u01/app/oracle/oradata/oradb/users01.dbf
+DUC			5	    0 /u01/duc01.dbf
+
+Now, create a new table on the tablespace DUC.
+
+=> create table t1 tablespace duc as select * from hr.employees;
+
+Table created.
+
+SQL> select count(*) from t1;
+
+  COUNT(*)
+----------
+       107
+
+col table_name for a15
+	
+	select table_name, tablespace_name from user_tables where table_name='T1';
+
+TABLE_NAME		TABLESPACE_NAME
+------------	------------
+T1			DUC
+
+
+
+Now, start inserting the more data in the same table until the size of the "DUC" TS will not get full.
+
+INSERT INTO T1 (SELECT * FROM T1);
+
+107 rows created.
+
+SQL> /
+
+214 rows created.
+
+SQL> /
+
+428 rows created.
+
+SQL> /
+
+856 rows created.
+
+SQL> /
+
+1712 rows created.
+
+SQL> /
+
+3424 rows created.
+
+SQL> /
+INSERT INTO T1 (SELECT * FROM T1)
+*
+ERROR at line 1:
+ORA-01653: unable to extend table SYS.T1 by 8 in tablespace DUC 
+
+NOTE: To resolve the above error for the tabelspace, we have three options.
+
+SQL> /* INCREASE TABLESPACE SIZE
+SQL> 		1) RESIZE EXISTING DATAFILE
+SQL> 		2) ENABLE AUTOEXTEND
+SQL> 		3) ADD NEW DATAFILE
+SQL> */
+SQL> 
+SQL> /* 1) RESIZE EXISTING DATAFILE */
+SQL> 
+SQL> ALTER DATABASE DATAFILE '/u01/duc01.dbf' RESIZE 10M;
+
+Database altered.
+
+SQL> INSERT INTO T1 (SELECT * FROM T1);
+
+6848 rows created.
+
+SQL> /
+
+13696 rows created.
+
+SQL> /
+
+27392 rows created.
+
+SQL> /
+
+54784 rows created.
+
+SQL> /
+INSERT INTO T2 (SELECT * FROM T2)
+*
+ERROR at line 1:
+ORA-01653: unable to extend table SYS.T2 by 128 in tablespace ACC 
+
+
+NOTE: even after resize the tabelspace, user will get again the same error, so in that case we use another methode.
+
+SQL> 
+SQL> 
+SQL> /* 2) ENABLE AUTOEXTEND  */
+SQL> 
+SQL> ALTER DATABASE DATAFILE '/u01/duc01.dbf' AUTOEXTEND ON;
+
+Database altered.
+
+	SELECT TABLESPACE_NAME,FILE_NAME,BYTES/1024/1024 ORG_SIZE_MB,MAXBYTES/1024/1024/1024 MAX_SIZE_GB, AUTOEXTENSIBLE, STATUS FROM DBA_DATA_FILES;
+
+TABLESPACE_NA FILE_NAME 				    ORG_SIZE_MB		MAX_SIZE_GB
+------------- --------------------------------------------- -----------		----------
+SYSTEM	      /u01/app/oracle/oradata/orcl/system01.dbf 	    810		31.9999847
+
+SYSAUX	      /u01/app/oracle/oradata/orcl/sysaux01.dbf 	    500		31.9999847
+
+UNDOTBS1      /u01/app/oracle/oradata/orcl/undotbs01.dbf	     65		31.9999847
+
+USERS	      /u01/app/oracle/oradata/orcl/users01.dbf		      5		31.9999847
+
+DUC	      /u01/app/oracle/oradata/orcl/duc01.dbf		     10		31.9999847
+
+6 rows selected.
+
+	insert into t1 select * from t1;
+
+Another methode for autoextend.
+
+SQL> ALTER DATABASE DATAFILE '/u01/duc01.dbf' AUTOEXTEND ON MAXSIZE 1G;
+
+Database altered.
+
+SQL>  SELECT TABLESPACE_NAME, BYTES/1024/1024 ORG_SIZE_MB, MAXBYTES/1024/1024/1024 MAX_SIZE_GB, FILE_NAME FROM DBA_DATA_FILES;
+
+TABLESPACE_NA ORG_SIZE_MB MAX_SIZE_GB FILE_NAME
+------------- ----------- ----------- ---------------------------------------------
+SYSTEM		      890  31.9999847 /u01/app/oracle/oradata/oradb/system01.dbf
+SYSAUX		      700  31.9999847 /u01/app/oracle/oradata/oradb/sysaux01.dbf
+UNDOTBS1	      225  31.9999847 /u01/app/oracle/oradata/oradb/undotbs01.dbf
+USERS			5  31.9999847 /u01/app/oracle/oradata/oradb/users01.dbf
+DUC		       10  31.9999847 /u01/duc01.dbf
+
+SQL> 
+SQL> /* 3) ADD NEW DATAFILE */
+SQL> ALTER TABLESPACE DUC ADD DATAFILE '/u01/app/oracle/oradata/orcl/duc02.dbf' size 100m;
+
+ SELECT TABLESPACE_NAME, BYTES/1024/1024 ORG_SIZE_MB, MAXBYTES/1024/1024/1024 MAX_SIZE_GB, FILE_NAME FROM DBA_DATA_FILES;
+
+TABLESPACE_NA ORG_SIZE_MB MAX_SIZE_GB FILE_NAME
+------------- ----------- ----------- ---------------------------------------------
+SYSTEM		      890  31.9999847 /u01/app/oracle/oradata/oradb/system01.dbf
+SYSAUX		      700  31.9999847 /u01/app/oracle/oradata/oradb/sysaux01.dbf
+UNDOTBS1	      225  31.9999847 /u01/app/oracle/oradata/oradb/undotbs01.dbf
+USERS			5  31.9999847 /u01/app/oracle/oradata/oradb/users01.dbf
+DUC		 152.6875  31.9999847 /u01/duc01.dbf
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+NOTE: while altering the datafile size have to use the keyword "alter DATABASE", but while adding the datafile in tablespace we have to use the keyword "alter TABLESPACE"
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+	>>>>>>>>>>>> /* BIGFILE TABLESPACE ---> 10G   */<<<<<<<<<<<<
+
+	CREATE BIGFILE TABLESPACE tree DATAFILE '/u01/app/tree01.dbf' size 1G AUTOEXTEND ON;
+
+Tablespace created.
+
+	SELECT TABLESPACE_NAME, BYTES/1024/1024 ORG_SIZE_MB, MAXBYTES/1024/1024/1024 MAX_SIZE_GB, FILE_NAME FROM DBA_DATA_FILES;
+
+TABLESPACE_NA ORG_SIZE_MB MAX_SIZE_GB FILE_NAME
+------------- ----------- ----------- ---------------------------------------------
+SYSTEM		      890  31.9999847 /u01/app/oracle/oradata/oradb/system01.dbf
+SYSAUX		      700  31.9999847 /u01/app/oracle/oradata/oradb/sysaux01.dbf
+UNDOTBS1	      225  31.9999847 /u01/app/oracle/oradata/oradb/undotbs01.dbf
+USERS			5  31.9999847 /u01/app/oracle/oradata/oradb/users01.dbf
+DUC		 152.6875  31.9999847 /u01/duc01.dbf
+DUC			5	    1 /u01/app/oracle/oradata/oradb/duc02.dbf
+ACC		     1024	32768 /u01/app/acc01.dbf
+
+
+
+>>>>>>>>>>Do cross check using the view v$tablespace.<<<<<<<<<<<<<<<<<<<
+
+select name, bigfile from v$tablespace;
+
+NAME			       BIG
+------------------------------ ---
+SYSAUX			       NO
+SYSTEM			       NO
+UNDOTBS1		       NO
+USERS			       NO
+TEMP			       NO
+DUC			       NO
+ACC			       YES
+
+7 rows selected.
+
+
+
+Now, we can try to add new datafile in the BIG file TABLESPACE.
+
+SQL> ALTER TABLESPACE ACC ADD DATAFILE '/u01/app/oracle/oradata/orcl/acc02.dbf' size 1m;
+ALTER TABLESPACE ACC ADD DATAFILE '/u01/app/oracle/oradata/orcl/acc02.dbf' size 1m
+*
+ERROR at line 1:
+ORA-32771: cannot add file to bigfile tablespace
+ 
+
+
+SQL> 
+SQL> /* UNDO TABLESPACE :- STORE UNDO DATA ( OLD IMAGE OF TRANSACTION )
+SQL> 			   ROLLBACK
+SQL>  			   READ CONSISTENCY
+SQL> 			   FLASHBACK
+SQL> */
+SQL> 
+SQL> SHOW PARAMETER UNDO
+NAME			   TYPE	        VALUE
+-----------------------	----------- --------------
+temp_undo_enabled	 boolean	FALSE
+undo_management 	 string	 	AUTO
+undo_retention		integer	 900
+undo_tablespace 	 string	 	UNDOTBS1                         
+SQL>
+SQL> 
+SQL> CREATE UNDO TABLESPACE UNDO2 DATAFILE '/u01/app/oracle/oradata/oradb/UNDO01.dbf' size 10m;
+
+Tablespace created.
+
+SQL> ALTER SYSTEM SET UNDO_TABLESPACE='UNDO2';
+
+System altered.
+
+SQL> SHOW PARAMETER UNDO
+NAME			   TYPE	        VALUE
+-----------------------	----------- --------------
+temp_undo_enabled	 boolean	FALSE
+undo_management 	 string	 	AUTO
+undo_retention		 integer	900
+undo_tablespace 	 string	 	UNDO2 
+
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NOTE: If the parameter value for UNDO TABLESPACE is set to '' (two single quotes), then the current undo tablespace is switched out and the next available undo tablespace is switched in. Use this statement with care because there may be no undo tablespace available.
+
+The following example unassigns the current undo tablespace:
+
+ALTER SYSTEM SET UNDO_TABLESPACE = '';
+
+SHOW PARAMETER UNDO
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+temp_undo_enabled		     boolean	 FALSE
+undo_management 		     string	 AUTO
+undo_retention			     integer	 900
+undo_tablespace 		     string
+
+The below mention Error will be raise.
+
+delete from tata20;
+delete from tata20
+            *
+ERROR at line 1:
+ORA-01552: cannot use system rollback segment for non-system tablespace 'USERS'            
+
+*************************************************************************************************************
+
+
+SQL> 
+SQL> /* TEMPORARY TABLESPACE :- ORDER BY
+SQL> 				DISTINCT
+SQL> 				CREATE INDEX ...
+SQL> 				GROUP BY
+SQL> 				etc...
+SQL> */
+SQL> 
+SQL> CREATE TEMPORARY TABLESPACE TEMP2 TEMPFILE '/u01/app/oracle/oradata/oradb/temp02.dbf' size 10m;
+
+Tablespace created.
+
+SQL> 
+SQL> DESC DATABASE_PROPERTIES
+ Name			   Null?	Type
+ ----------------------- -------- -------------------------
+ PROPERTY_NAME				VARCHAR2(128)
+ PROPERTY_VALUE 			VARCHAR2(4000)
+ DESCRIPTION				VARCHAR2(4000)
+
+********************************************************************************************************
+
+>>>>>>>>>>>>>>>>>>>>> To make TEMP tablespace as OFFLINE<<<<<<<<<<<<<<<<
+
+/* To check the status of temp file*/
+
+select name, status from v$tempfile;
+
+alter database tempfile '/u01/app/oracle/oradata/oradb/temp01.dbf' offline;
+
+Database altered.
+
+ col name for a40
+
+select status, name from v$tempfile;
+
+STATUS	NAME
+------- ----------------------------------------
+OFFLINE /u01/app/oracle/oradata/oradb/temp01.dbf
+ONLINE	/u01/app/oracle/oradata/oradb/temp02.dbf
+
+********************************************************************************************************
+
+
+	COL PROPERTY_VALUE FOR A30
+	col property_name for a35
+ 
+SQL> SELECT PROPERTY_NAME,PROPERTY_VALUE FROM DATABASE_PROPERTIES WHERE PROPERTY_NAME LIKE 'DEFAULT%';
+
+PROPERTY_NAME		       PROPERTY_VALUE
+------------------------------ ------------------------------
+DEFAULT_TEMP_TABLESPACE        TEMP
+DEFAULT_PERMANENT_TABLESPACE   USERS
+DEFAULT_EDITION 	       ORA$BASE
+DEFAULT_TBS_TYPE	       SMALLFILE
+
+SQL> ALTER DATABASE DEFAULT TEMPORARY TABLESPACE TEMP2;
+
+Database altered.
+
+SELECT PROPERTY_NAME,PROPERTY_VALUE FROM DATABASE_PROPERTIES WHERE PROPERTY_NAME LIKE 'DEFAULT%';
+
+PROPERTY_NAME			    PROPERTY_VALUE
+----------------------------------- ------------------------------
+DEFAULT_TBS_TYPE		    SMALLFILE
+DEFAULT_EDITION 		    ORA$BASE
+DEFAULT_PERMANENT_TABLESPACE	    USERS
+DEFAULT_TEMP_TABLESPACE 	    TEMP
+
+
+SQL> 
+SQL> /* DEFAULT_PERMANENT_TABLESPACE  ---> USERS */
+SQL> 
+SQL> 
+SQL> 	CREATE USER krish IDENTIFIED BY krish;
+ELSE
+	CREATE USER krish IDENTIFIED BY krish quota unlimited on DUC;
+
+User created.
+
+SQL> GRANT CREATE SESSION,CREATE TABLE TO KRISH;
+
+Grant succeeded.
+
+SQL> sqlplus KRISH/KRISH
+Connected.
+SQL> 
+SQL> CREATE TABLE T1(ID INT);
+
+Table created.
+
+SQL> SELECT TABLESPACE_NAME FROM USER_TABLES WHERE TABLE_NAME='T2';
+
+TABLESPACE_NAME
+------------------------------
+USERS
+
+SQL> CONN / AS SYSDBA
+Connected.
+SQL> 
+SQL> ALTER DATABASE DEFAULT TABLESPACE DUC;
+SQL> alter user ram quota unlimited on users;
+User altered.
+
+
+SQL> CONN HR/hr
+Connected.
+SQL> 
+SQL> CREATE TABLE T2(ID INT);
+
+Table created.
+
+SQL> SELECT TABLESPACE_NAME FROM USER_TABLES WHERE TABLE_NAME='T2';
+
+TABLESPACE_NAME
+------------------------------
+ACC
+
+
+************************************************************************************************************
+/* OTHER ACTIVITY ON TABLESPACE from DBA USER */
+ 
+select status, tablespace_name from dba_tablespaces;
+
+STATUS	  TABLESPACE_NA
+--------- -------------
+ONLINE	  SYSTEM
+ONLINE	  SYSAUX
+ONLINE	  UNDOTBS1
+ONLINE	  TEMP
+ONLINE	  USERS
+ONLINE	  ACC
+ONLINE    DUC
+
+SQL> ALTER TABLESPACE DUC READ ONLY;
+
+Tablespace altered.
+
+SQL> 
+SQL> ALTER TABLESPACE DUC READ WRITE;
+
+Tablespace altered.
+
+SQL> alter database datafile '/u01/app/oracle/oradata/oradb/duc02.dbf' offline;
+
+NOTE: the above mention command will put the particular datafile in the offline mode.
+
+	alter tablespace duc offline;		<<<<< to offline all datafile of that tablespace.
+
+Tablespace altered.
+
+alter tablespace temp offline;
+
+alter database tempfile  '/u01/app/oracle/oradata/oradb/temp01.dbf' offline;
+
+
+select status from v$tempfile;
+
+STATUS
+-------
+OFFLINE
+
+SQL> ALTER TABLESPACE ACC ONLINE;
+
+Tablespace altered.
+
+SQL> ALTER TABLESPACE ACC RENAME TO ACCOUNT;
+
+Tablespace altered.
+
+SQL> SELECT TABLESPACE_NAME,FILE_NAME FROM DBA_DATA_FILES;
+
+TABLESPACE_NA FILE_NAME                                                                                                 
+------------- ---------------------------------------------                                                             
+USERS         /u01/app/oracle/oradata/orcl/users01.dbf                                                                  
+UNDOTBS1      /u01/app/oracle/oradata/orcl/undotbs01.dbf                                                                
+SYSAUX        /u01/app/oracle/oradata/orcl/sysaux01.dbf                                                                 
+SYSTEM        /u01/app/oracle/oradata/orcl/system01.dbf                                                                 
+EXAMPLE       /u01/app/oracle/oradata/orcl/example01.dbf                                                                
+ACCOUNT       /u01/app/oracle/oradata/orcl/acc01.dbf                                                                    
+ACCOUNT       /u01/app/oracle/oradata/orcl/acc02.dbf                                                                    
+DUC           /u01/app/oracle/oradata/orcl/duc01.dbf                                                                    
+UNDO2         /u01/app/oracle/oradata/orcl/undo02.dbf                                                                   
+
+9 rows selected.
+
+SQL> #########  RENAMING DATAFILE IN ORACLE 11G:-  ############
+ 
+SQL> ALTER TABLESPACE DUC OFFLINE;
+
+Tablespace altered.
+
+SQL> !mv /u01/app/oracle/oradata/prod/duc01.dbf /u01/
+
+SQL> ALTER DATABASE RENAME FILE '/u01/app/oracle/oradata/prod/duc01.dbf' TO '/u01/duc01.dbf';
+
+Database altered.
+
+SQL> ALTER TABLESPACE DUC ONLINE;
+
+Tablespace altered.
+
+SQL> SELECT TABLESPACE_NAME,FILE_NAME FROM DBA_DATA_FILES;
+
+ 
+ #########  RENAMING DATAFILE IN ORACLE 12C:-  ############
+
+
+NOTE: Just we have to do the single query to make move and update the new tablespac alocation info in control file.
+
+SQL> ALTER DATABASE MOVE DATAFILE '/u01/acc01.dbf' TO '/u01/app/oracle/oradata/orcl/acc01.dbf';
+
+SQL> ALTER TABLESPACE duc DROP DATAFILE '/u01/app/oracle/oradata/orcl/duc01.dbf';
+
+Tablespace altered.
+
+SQL> DROP TABLESPACE DUC;    // if tablespace is empty
+
+Tablespace dropped.
+
+SQL> DROP TABLESPACE DUC INCLUDING CONTENTS AND DATAFILES; // if tablespace is not empty
+
+Tablespace dropped.
+
+===========================
+Oracle Managed Files (OMF)
+===========================
+
+SQL> 
+SQL> alter system set db_create_file_dest='/u01/app/oracle/oradata/orcl/';
+
+
+System altered.
+
+SQL> create tablespace acc;
+
+Tablespace created.
+
+SQL> select file_name from dba_data_files;
+
+FILE_NAME
+--------------------------------------------------------------------------------
+/u01/app/oracle/oradata/orcl/system01.dbf
+/u01/app/oracle/oradata/orcl/sysaux01.dbf
+/u01/app/oracle/oradata/orcl/undotbs01.dbf
+/u01/app/oracle/oradata/orcl/users01.dbf
+/u01/app/oracle/oradata/orcl/ORCL/datafile/o1_mf_acc_f5mm6h62_.dbf
+
+
+Tablespace altered.
+
+SQL> select file_name from dba_data_files;
+
+FILE_NAME
+--------------------------------------------------------------------------------
+/u01/app/oracle/oradata/orcl/system01.dbf
+/u01/app/oracle/oradata/orcl/sysaux01.dbf
+/u01/app/oracle/oradata/orcl/undotbs01.dbf
+/u01/app/oracle/oradata/orcl/users01.dbf
+/u01/app/oracle/oradata/orcl/ORCL/datafile/o1_mf_acc_f5mm6h62_.dbf
+/u01/app/oracle/oradata/orcl/ORCL/datafile/o1_mf_acc_f5mm9bnx_.dbf
+
+6 rows selected.
+
+SQL> select tablespace_name,bytes/1024/1024,maxbytes/1024/1024 from dba_data_files;
+
+TABLESPACE_NAME 	       BYTES/1024/1024 MAXBYTES/1024/1024
+------------------------------ --------------- ------------------
+SYSTEM					   810	       32767.9844
+SYSAUX					   480	       32767.9844
+UNDOTBS1				    70	       32767.9844
+USERS					     5	       32767.9844
+ACC					   100	       32767.9844
+ACC					   100	       32767.9844
+
+6 rows selected.
+
+SQL> create tablespace duc datafile size 10m;
+
+Tablespace created.
+
+SQL> select tablespace_name,bytes/1024/1024,maxbytes/1024/1024 from dba_data_files;
+
+TABLESPACE_NAME 	       BYTES/1024/1024 MAXBYTES/1024/1024
+------------------------------ --------------- ------------------
+SYSTEM					   810	       32767.9844
+SYSAUX					   480	       32767.9844
+UNDOTBS1				    70	       32767.9844
+USERS					     5	       32767.9844
+ACC					   100	       32767.9844
+ACC					   100	       32767.9844
+DUC					    10			0
+
+7 rows selected.
+
+SQL> drop tablespace acc;
+
+Tablespace dropped.
+
+

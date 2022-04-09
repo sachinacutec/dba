@@ -1,0 +1,880 @@
+[oracle@oracle-pc Desktop]$ sqlplus / as sysdba
+
+SQL*Plus: Release 11.2.0.1.0 Production on Tue Jun 6 14:07:12 2017
+
+Copyright (c) 1982, 2009, Oracle.  All rights reserved.
+
+
+Connected to:
+Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - 64bit Production
+With the Partitioning, OLAP, Data Mining and Real Application Testing options
+
+SQL> show user
+USER is "SYS"
+SQL> 
+SQL> 
+	 USER MANAGEMENT
+ 		CREATE USER ..
+		CHECK DATABASE USERS AND OTHER PROPERTIES 		
+		PROVIDE PRIVILEGES
+		ROLE MANAGEMENT
+		CREATE USER PROFILE
+		PROFILE: PASSWORD MANAGEMENT
+		
+
+SQL> SELECT NAME FROM V$DATABASE;
+		NAME
+		-----
+		ORCL
+
+SQL> /* We Can Find User Related Information From:
+SQL> 		DBA_USERS ---- Static
+SQL> 		V$SESSION ---- Dynamic
+SQL> */
+SQL> 
+SQL> DESC DBA_USERS
+ Name                                      Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ USERNAME                                  NOT NULL VARCHAR2(30)
+ USER_ID                                   NOT NULL NUMBER
+ PASSWORD                                           VARCHAR2(30)
+ ACCOUNT_STATUS                            NOT NULL VARCHAR2(32)
+ LOCK_DATE                                          DATE
+ EXPIRY_DATE                                        DATE
+ DEFAULT_TABLESPACE                        NOT NULL VARCHAR2(30)
+ TEMPORARY_TABLESPACE                      NOT NULL VARCHAR2(30)
+ CREATED                                   NOT NULL DATE
+ PROFILE                                   NOT NULL VARCHAR2(30)
+ INITIAL_RSRC_CONSUMER_GROUP                        VARCHAR2(30)
+ EXTERNAL_NAME                                      VARCHAR2(4000)
+ PASSWORD_VERSIONS                                  VARCHAR2(8)
+ EDITIONS_ENABLED                                   VARCHAR2(1)
+ AUTHENTICATION_TYPE                                VARCHAR2(8)
+
+SQL> COL USERNAME FOR A15
+SQL> COL ACCOUNT_STATUS FOR A20
+SQL> COL DEFAULT_TABLESPACE FOR A15
+SQL> 
+SQL> SET PAGESIZE 300
+SQL> SELECT USERNAME,ACCOUNT_STATUS,LOCK_DATE,EXPIRY_DATE,DEFAULT_TABLESPACE FROM DBA_USERS;
+
+USERNAME        ACCOUNT_STATUS       LOCK_DATE EXPIRY_DA DEFAULT_TABLESP        
+--------------- -------------------- --------- --------- ---------------        
+MGMT_VIEW       OPEN                           25-JUN-17 SYSTEM                 
+SYS             OPEN                           25-JUN-17 SYSTEM                 
+SYSTEM          OPEN                           25-JUN-17 SYSTEM                 
+DBSNMP          OPEN                           25-JUN-17 SYSAUX                 
+SYSMAN          OPEN                           25-JUN-17 SYSAUX                 
+SCOTT           OPEN                           25-JUN-17 USERS                  
+HR              OPEN                           25-JUN-17 USERS                  
+OUTLN           EXPIRED & LOCKED     27-DEC-16 15-AUG-09 SYSTEM                 
+FLOWS_FILES     EXPIRED & LOCKED     27-DEC-16 15-AUG-09 SYSAUX                 
+MDSYS           EXPIRED & LOCKED     27-DEC-16 15-AUG-09 SYSAUX                 
+ORDSYS          EXPIRED & LOCKED     27-DEC-16 15-AUG-09 SYSAUX                 
+EXFSYS          EXPIRED & LOCKED     27-DEC-16 15-AUG-09 SYSAUX                 
+	.
+	.
+	.
+	.                                                                                
+
+36 rows selected.
+
+SQL> /* CHECK LOGIN USERS */
+SQL> 
+SQL> SELECT USERNAME FROM V$SESSION WHERE USERNAME IS NOT NULL;
+
+USERNAME                                                                        
+---------------                                                                 
+SYS                                                                             
+
+SQL> /
+
+USERNAME                                                                        
+---------------                                                                 
+SYS                                                                             
+HR                                                                              
+
+SQL> /
+
+USERNAME                                                                        
+---------------                                                                 
+SYS                                                                             
+SCOTT                                                                           
+HR                                                                              
+
+SQL> /
+
+USERNAME                                                                        
+---------------                                                                 
+SYS                                                                             
+SCOTT                                                                           
+
+SQL> /* When we Create User we Specify Default Tablespace and Quota, So Check 
+SQL>    Tablespace Name and Available Size on tablespace. 
+SQL> 
+SQL> 
+SQL> DESC DBA_DATA_FILES
+ Name                                      Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ FILE_NAME                                          VARCHAR2(513)
+ FILE_ID                                            NUMBER
+ TABLESPACE_NAME                                    VARCHAR2(30)
+ BYTES                                              NUMBER
+ BLOCKS                                             NUMBER
+ STATUS                                             VARCHAR2(9)
+ RELATIVE_FNO                                       NUMBER
+ AUTOEXTENSIBLE                                     VARCHAR2(3)
+ MAXBYTES              	                            NUMBER
+ MAXBLOCKS                                          NUMBER
+ INCREMENT_BY                                       NUMBER
+ USER_BYTES                                         NUMBER
+ USER_BLOCKS                                        NUMBER
+ ONLINE_STATUS                                      VARCHAR2(7)
+
+SQL> SELECT TABLESPACE_NAME,BYTES/1024/1024 CURR_SIZE_MB,MAXBYTES/1024/1024 MAX_SIZE_MB FROM DBA_DATA_FILES;
+
+TABLESPACE_NAME                CURR_SIZE_MB MAX_SIZE_MB                         
+------------------------------ ------------ -----------                         
+USERS                                     5  32767.9844                         
+UNDOTBS1                                 60  32767.9844                         
+SYSAUX                                  500  32767.9844                         
+SYSTEM                                  670  32767.9844                         
+EXAMPLE                                 100  32767.9844                         
+
+SQL> 
+	/* Check Available Free Space In Tablespaces */
+
+SQL> desc DBA_FREE_SPACE.
+
+Name					   Null?    Type
+ ----------------------------------------- -------- 
+ TABLESPACE_NAME				    VARCHAR2(30)
+ FILE_ID					    NUMBER
+ BLOCK_ID					    NUMBER
+ BYTES						    NUMBER
+ BLOCKS 					    NUMBER
+ RELATIVE_FNO					    NUMBER
+
+SQL>SELECT TABLESPACE_NAME,SUM(BYTES)/1024/1024 FROM DBA_FREE_SPACE GROUP BY TABLESPACE_NAME;
+
+TABLESPACE_NAME 	       SUM(BYTES)/1024/1024
+------------------------------ --------------------
+SYSAUX					    29.0625
+UNDOTBS1				    41.6875
+USERS					      .9375
+SYSTEM						4.5
+EXAMPLE 				    21.5625
+
+
+	You use the CREATE USER statement to create a user. It’s good practice to assign each new user both a
+default temporary and a default permanent tablespace. Since I’m assuming that you’ve already created
+both of these tablespaces when you created the database, the CREATE USER statement can be very
+simple, as shown here:
+SQL> 
+
+
+	CREATE USER krish IDENTIFIED BY krish DEFAULT TABLESPACE users QUOTA 2M ON users QUOTA 1M ON USERS TEMPORARY TABLESPACE TEMP  ACCOUNT UNLOCK  PROFILE DEFAULT;
+
+User created.
+	------------------------------------------
+	|  Now Try To connect With Krish User.   |
+	------------------------------------------
+SQL> CONNECT
+Enter user-name: KRISH
+Enter password:
+ERROR:
+ORA-01045: user KRISH lacks CREATE SESSION privilege; logon denied
+
+
+Warning: You are no longer connected to ORACLE.
+
+SQL> 
+SQL> SHOW USER
+USER is ""
+SQL> 
+SQL> CONN / AS SYSDBA
+Connected.
+SQL> 
+In order for the Krish user to connect and start communicating with the database, you must
+grant the privilege to the new user.
+SQL> TWO TYPES OF PRIVILEGES:
+SQL> 
+SQL> 		1) SYSTEM PRIVILEGE :- ACTION ON DATABASE
+SQL> 			EXAMPLE :-
+SQL> 				CREATE SESSION
+SQL> 				CREATE TABLE
+SQL> 				CREATE VIEW
+SQL> 				CREATE SEQUENCE
+SQL> 				CREATE SYNONYM
+SQL> 				CREATE TABLESPACE
+SQL> 				etc.. >200   
+SQL> 				SELECT PRIVILEGE FROM USER_SYS_PRIVS;   // FROM SYS USER
+SQL> 
+SQL> 		2) OBJECT PRIVILEGE :- ACTION ON DATABASE OBJECT
+SQL> 			EXAMPLE :-
+SQL> 				SELECT ON SCOTT.DEPT
+SQL> 				INSERT ON HR.EMPLOYEES
+SQL> 				UPDATE ON SCOTT.DEPT
+SQL> 				DELETE ON HR.LOCATIONS
+SQL> 				ALTER ON SCOTT.DEPT
+SQL> 				etc ... 11
+SQL> 
+SQL> PROVIDE PRIVILEGES THROUGH GRANT COMMAND.
+SQL> 
+SQL> */
+SQL> 
+SQL> 	GRANT CREATE SESSION TO krish;
+	GRANT create any table TO krish;
+
+Grant succeeded.
+
+WITH ADMIN OPTION:
+			We can use admin option flag only while granting system privilege and not with object privilege.
+
+
+SQL> /* GRANT CREATE SESSION,CREATE TABLE TO krish WITH ADMIN OPTION
+
+NOTE: in that case once ram will provide the same privilege to any other user, on that user can revoke the same privs from another user who have REVOKE privilige */ 
+
+SQL> 
+SQL> CONNECT
+Enter user-name: krish
+Enter password: 
+Connected.
+SQL> 
+SQL> /* CHECK PRIVILEGES */
+SQL> employees
+SQL> SELECT * FROM USER_SYS_PRIVS;
+
+USERNAME        PRIVILEGE                                ADM                    
+--------------- ---------------------------------------- ---                    
+KRISH           CREATE SESSION                           NO                     
+KRISH           CREATE TABLE                             NO                     
+
+SQL> CREATE TABLE T1(ID INT);
+
+Table created.
+
+SQL> INSERT INTO T1 VALUES(1);
+
+1 row created.
+
+SQL> COMMIT;
+
+Commit complete.
+
+SQL> SELECT TABLESPACE_NAME,TABLE_NAME FROM USER_TABLES;
+
+TABLESPACE_NAME                TABLE_NAME                                       
+------------------------------ ------------------------------                   
+EXAMPLE                        T1                                               
+drop user krish cascade;
+SQL> CREATE TABLE T2(ID INT) TABLESPACE USERS;
+
+Table created.
+
+SQL> INSERT INTO T2 VALUES(1);
+
+1 row created.
+
+SQL> COMMIT;
+
+Commit complete.
+
+SQL> SELECT TABLESPACE_NAME,TABLE_NAME FROM USER_TABLES;
+
+TABLESPACE_NAME                TABLE_NAME                                       
+------------------------------ ------------------------------                   
+USERS                          T2                                               
+EXAMPLE                        T1                                               
+
+SQL> 
+SQL> /* WANT TO SELECT HR.DEPARTMENTS TABLE */
+SQL> 
+SQL> SELECT * FROM HR.DEPARTMENTS;
+SELECT * FROM HR.DEPARTMENTS
+                    *
+ERROR at line 1:
+ORA-00942: table or view does not exist 
+
+				
+
+/* OBJECT Privileges */
+
+SQL> With Grant option:
+
+=> Only for object privileges, not system privileges.
+
+=> Only the person who granted the privilege can revoke the privilege.
+
+=> Revoked privileges can "cascade", allowing the first grantor to revoke many subsequent grants.
+
+
+	/* NEED OBJECT PRIVILEGE and GRANT ANY OBJECT PRIVILEGE  */
+NOTE: that means if raj will get any object privil on any other user's object, later on raj can provide the same access on the same user's object to any other user.
+
+
+SQL> CONN / AS SYSDBA
+Connected.
+
+SQL> GRANT ALL ON HR.DEPARTMENTS TO KRISH; (Here 'ALL' means all object privs in a single stroke)
+OR
+SQL> GRANT SELECT,UPDATE ON HR.DEPARTMENTS TO KRISH;
+
+sql> CONN KRISH/KRISH
+connected.
+SQL>GRANT grant ANY OBJECT PRIVILEGE ON HR.DEPARTMENTS TO RAJ2;
+Grant succeeded.
+
+GRANT SELECT,UPDATE ON hr.DEPT TO ram WITH GRANT OPTION
+
+				"OR"
+
+GRANT create table, create view to ram WITH GRANT OPTION; 
+
+NOTE: Here WITH GRANT means now raj user can passon the same object privilege on the same user's object to any other user by his own.BA_FREE_SPACE 
+
+/* To check what are the privileges user have recevied on which particular user's object */
+
+SQL> desc user_tab_privs;
+ Name					   Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ GRANTEE					    VARCHAR2(128)
+ OWNER					    VARCHAR2(128)
+ TABLE_NAME					    VARCHAR2(128)
+ GRANTOR					    VARCHAR2(128)
+ PRIVILEGE					    VARCHAR2(40)
+ GRANTABLE					    VARCHAR2(3)
+ HIERARCHY					    VARCHAR2(3)
+ COMMON 					    VARCHAR2(3)
+ TYPE					    VARCHAR2(24)
+ INHERITED					    VARCHAR2(3)
+
+SQL> select grantee, owner, table_name from user_tab_privs where grantee='HR';
+SQL> col grantee for a10;
+SQL> col owner for a10;
+SQL> col table_name for a10;
+	col GRANTOR for a15;
+SQL> /
+
+select GRANTEE,OWNER, TABLE_NAME, GRANTOR, PRIVILEGE, GRANTABLE from user_tab_privs;
+
+GRANTEE    OWNER      TABLE_NAME GRANTOR    PRIVILEGE 		GRA
+---------- ---------- ---------- ---------- ----------		---
+RAJ	   HR	      DEPT	 HR	    SELECT    	YES
+RAJ	   HR	      DEPT	 HR	    UPDATE    	YES
+PUBLIC	   SYS	      RAJ	 RAJ	    INHERIT 	NO
+
+/* Here Grantable means that, this user can pass-on this particular privs to another user as sys can do. */
+
+SQL> desc user_sys_privs;
+ Name					   Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ USERNAME					    VARCHAR2(128)
+ PRIVILEGE					    VARCHAR2(40)
+ ADMIN_OPTION				    	   VARCHAR2(3)
+ COMMON 					    VARCHAR2(3)
+ INHERITED					    VARCHAR2(3)
+
+USERNAME		PRIVILEGE			ADM
+----------		--------------- 		---
+RAJ			CREATE TABLE			NO
+RAJ			CREATE SESSION			NO
+
+SQL> select username, PRIVILEGE , admin_option from user_sys_privs;
+
+
+SQL> 
+SQL> conn raj/raj
+Connected.
+
+SQL> 
+SQL> SELECT * FROM HR.DEPT;
+
+    DEPTNO DNAME          LOC                                                   
+---------- -------------- -------------                                         
+        10 ACCOUNTING     NEW YORK                                              
+        20 RESEARCH       DALLAS                                                
+        30 SALES          CHICAGO                                               
+        40 OPERATIONS     BOSTON                                                
+
+SQL> UPDATE HR.DEPARTMENTS SET LOC='DELHI' WHERE DEPTNO=20;
+
+1 row updated.
+
+SQL> DELETE FROM HR.DEPARTMENTS;
+DELETE FROM HR.DEPARTMENTS
+                  *
+ERROR at line 1:
+ORA-01031: insufficient privileges 
+
+
+SQL> /* CHECK OBJECT PRIVILEGE */
+SQL> 
+SQL> DESC USER_TAB_PRIVS_RECD
+ Name                                      Null?    Type
+ ----------------------------------------- -------- ----------------------------
+ OWNER                                     NOT NULL VARCHAR2(30)
+ TABLE_NAME                                NOT NULL VARCHAR2(30)
+ GRANTOR                                   NOT NULL VARCHAR2(30)
+ PRIVILEGE                                 NOT NULL VARCHAR2(40)
+ GRANTABLE                                          VARCHAR2(3)
+ HIERARCHY                                          VARCHAR2(3)
+
+SQL> COL OWNER FOR A10
+SQL> COL TABLE_NAME FOR A10
+SQL> COL GRANTOR FOR A10
+SQL> 
+SQL> SET LINE 100
+SQL> 
+SQL> SELECT OWNER,TABLE_NAME,GRANTOR,PRIVILEGE FROM USER_TAB_PRIVS_RECD;
+
+	OWNER		TABLE_NAME	GRANTOR		PRIVILEGE
+      ------------	--------	----------
+	HR		DEPARTMENTS	   HR		 SELECT
+	HR		DEPARTMENTS	   HR		 UPDATE
+SQL> 
+SQL> CONN / AS SYSDBA
+Connected.
+SQL> 
+SQL> 
+SQL> /* ROLE :- COLLECTION OF PRIVILEGES */  
+SQL> 
+SQL> REVOKE SELECT,UPDATE,delete ON HR.emp FROM RAM;
+
+Revoke succeeded.
+
+SQL> REVOKE CREATE TABLE FROM KRISH;
+
+Revoke succeeded.
+
+SQL> 
+SQL> 
+SQL> CREATE ROLE DEV;
+
+Role created.
+
+SQL> CREATE ROLE ADMIN IDENTIFIED BY A123;
+
+Role created.
+
+SQL> GRANT CREATE TABLE,CREATE VIEW, create synonym TO dev;
+
+Grant succeeded.
+
+SQL> GRANT create any index,DROP ANY TABLE  TO ADMIN;
+
+Grant succeeded SELECT ON SCOTT.DEPT
+SQL> 				INSERT ON HR.EMPLOYEES
+SQL> 				UPDATE ON SCOTT.DEPT
+SQL> 				DELETE ON HR.LOCATIONS
+SQL> 				ALTER ON SCOTT.DEPT
+SQL> 				etc ... 11
+
+SQL> 
+SQL> GRANT DEV,ADMIN TO KRISH;
+
+Grant succeeded.
+
+SQL> CONNECT
+Enter user-name: KRISH
+Connected.
+SQL> 
+SQL> 
+SQL> SELECT * FROM USER_SYS_PRIVS;
+
+USERNAME        PRIVILEGE                                ADM                                        
+--------------- ---------------------------------------- ---                                        
+KRISH           CREATE SESSION                           NO                                         
+
+SQL> SELECT * FROM USER_ROLE_PRIVS;
+
+USERNAME        GRANTED_ROLE                   ADM DEF OS_                                          
+--------------- ------------------------------ --- --- ---                                          
+KRISH           ADMIN                          NO  NO  NO                                           
+KRISH           DEV                            NO  YES NO                                           
+
+SQL> 
+SQL> col role for a10
+SQL> col PRIVILEGE for a15
+SQL> SELECT * FROM ROLE_SYS_PRIVS;
+
+ROLE                           PRIVILEGE                                ADM                         
+------------------------------ ---------------------------------------- ---                         
+ADMIN                          SELECT ANY TABLE                         NO                          
+DEV                            CREATE TABLE                             NO                          
+DEV                            CREATE VIEW                              NO                          
+ADMIN                          DROP ANY TABLE                           NO                          
+
+SQL> CREATE VIEW VU AS SELECT * FROM T1;
+
+View created.
+
+SQL> SELECT * FROM HR.REGIONS;
+SELECT * FROM HR.REGIONS
+                 *
+ERROR at line 1:
+ORA-00942: table or view does not exist 
+
+
+/* provide object privs via role */
+
+SQL> create role obj_role;
+
+Role created.
+
+SQL> grant select, update,delete,insert on hr.employees to obj_role;
+
+Grant succeeded.
+
+SQL> grant obj_role to krish;
+
+Grant succeeded.
+
+SQL> CONN
+Enter user-name: HR
+Connected.
+SQL> 
+SQL> SELECT * FROM TAB;
+
+TNAME                          TABTYPE  CLUSTERID                                                   
+------------------------------ ------- ----------                                                   
+COUNTRIES                      TABLE                                                                
+DEPARTMENTS                    TABLE                                                                
+EMPLOYEES                      TABLE                                                                
+EMP_DETAILS_VIEW               VIEW                                                                 
+JOBS                           TABLE                                                                
+JOB_HISTORY                    TABLE                                                                
+LOCATIONS                      TABLE                                                                
+REGIONS                        TABLE                                                                
+
+8 rows selected.
+
+SQL> SELECT * FROM REGIONS;
+
+ REGION_ID REGION_NAME                                                                              
+---------- -------------------------                                                                
+         1 Europe                                                                                   
+         2 Americas                                                                                 
+         3 Asia                                                                                     
+         4 Middle East and Africa                                                                   
+
+SQL> CONNECT
+Enter user-name: KRISH
+Connected.
+SQL> 
+SQL> SELECT * FROM HR.REGIONS;
+SELECT * FROM HR.REGIONS
+                 *
+ERROR at line 1:
+ORA-00942: table or view does not exist 
+
+
+SQL> SELECT * FROM ROLE_SYS_PRIVS;
+
+ROLE             PRIVILEGE     ADM                         
+----------------------------	------------                       
+ADMIN   SELECT ANY TABLE                         NO                          
+DEV                      CREATE TABLE                             NO                          
+DEV                            CREATE VIEW                              NO                          
+ADMIN                          DROP ANY TABLE                           NO                          
+
+SQL> SET ROLE ADMIN;
+SET ROLE ADMIN
+*
+ERROR at line 1:
+ORA-01979: missing or invalid password for role 'ADMIN' 
+
+
+SQL> SET ROLE ADMIN IDENTIFIED BY A123;
+
+Role set.
+
+SQL> SELECT * FROM HR.REGIONS;
+
+ REGION_ID REGION_NAME                                                                              
+---------- -------------------------                                                                
+         1 Europe                                                                                   
+         2 Americas                                                                                 
+         3 Asia                                                                                     
+         4 Middle East and Africa                                                                   
+
+SQL> 
+SQL> CONN / AS SYSDBA
+Connected.
+SQL>
+SQL> DROP ROLE DEV;
+
+Role dropped.
+
+SQL> 
+SQL> /* ALTER USER ... */
+You use the ALTER USER statement to alter a user in the database. Using this statement, you can do
+the following:
+• Change a user's password.
+• Assign tablespace quotas.
+• Set and alter default and temporary tablespaces.
+• Assign a profile and default roles.
+• Lock or Unlock the user account.
+• Expire user password.
+
+SQL> ALTER USER KRISH IDENTIFIED BY K123;
+
+User altered.
+
+SQL> 
+SQL> ALTER USER KRISH QUOTA UNLIMITED ON EXAMPLE;
+
+User altered.
+
+SQL> ALTER USER KRISH ACCOUNT LOCK;
+
+User altered.
+
+SQL> CONNECT
+Enter user-name: KRISH
+ERROR:
+ORA-28000: the account is locked 
+
+
+Warning: You are no longer connected to ORACLE.
+SQL> 
+SQL> CONN / AS SYSDBA
+Connected.
+SQL> 
+SQL> ALTER USER KRISH ACCOUNT UNLOCK;
+
+User altered.
+
+SQL> ALTER USER KRISH PASSWORD EXPIRE;
+
+User altered.
+
+SQL> CONNECT
+Enter user-name: KRISH
+Enter password: 
+ERROR:
+ORA-28001: the password has expired
+
+
+Changing password for KRISH
+New password: 
+Retype new password: 
+Password changed
+Connected.
+SQL> 
+SQL> CONN / AS SYSDBA
+Connected.
+SQL> 
+SQL> 
+SQL> 
+SQL> /* PASSWORD MANAGEMENT THROUGH PROFILE */
+SQL> 
+SQL> DESC DBA_PROFILES
+ Name                                                  Null?    Type
+ ----------------------------------------------------- -------- 
+ PROFILE                                               NOT NULL VARCHAR2(30)
+ RESOURCE_NAME                                         NOT NULL VARCHAR2(32)
+ RESOURCE_TYPE                                                  VARCHAR2(8)
+ LIMIT                                                          VARCHAR2(40)
+
+COL LIMIT FOR A20
+
+SELECT RESOURCE_NAME,LIMIT FROM DBA_PROFILES WHERE PROFILE='DEFAULT' AND RESOURCE_NAME LIKE '%PASSWORD%';
+
+RESOURCE_NAME			 LIMIT
+-------------------------------- --------------------
+PASSWORD_LIFE_TIME		 180
+PASSWORD_REUSE_TIME		 UNLIMITED
+PASSWORD_REUSE_MAX		 UNLIMITED
+PASSWORD_VERIFY_FUNCTION	 NULL
+PASSWORD_LOCK_TIME		 1
+PASSWORD_GRACE_TIME		 7
+
+6 rows selected.
+
+>>>>>>>>>>>>>>Meaning of terms using in as a parameter in the password profile<<<<<<<<<
+ 
+
+CREATE PROFILE my_profile LIMIT
+FAILED_LOGIN_ATTEMPTS 3  -- 	Account locked after 3 failed logins.
+PASSWORD_LOCK_TIME 2     -- 	Number of days account is locked for.
+PASSWORD_LIFE_TIME 2    -- 	default is 180 days
+PASSWORD_GRACE_TIME 3    -- 	Grace period for password expiration.
+PASSWORD_REUSE_TIME 4  -- 	Number of days until a specific password can be reused. UNLIMITED means never.
+ PASSWORD_REUSE_MAX 10    -- 	The number of changes required before a password can be reused. UNLIMITED means never.
+
+resource_parameters for KERNEL:
+
+	SELECT RESOURCE_NAME, LIMIT FROM DBA_PROFILES WHERE PROFILE='DEFAULT' AND RESOURCE_TYPE LIKE '%KERNEL%';
+
+
+You use the following clauses to set the limit for resource parameters:
+
+SESSIONS_PER_USER – specify the number of concurrent sessions that a user can have when connecting to the Oracle database.
+
+CPU_PER_SESSION – specify the CPU time limit for a user session, represented in hundredth of seconds.
+
+CPU_PER_CALL – specify the CPU time limit for a call such as a parse, execute, or fetch, expressed in hundredths of seconds.
+
+CONNECT_TIME – specify the total elapsed time limit for a user session, expressed in minutes.
+
+IDLE_TIME – specify the number of minutes allowed periods of continuous inactive time during a user session. Note that the long-running queries and other operations will not subject to this limit.
+
+LOGICAL_READS_PER_SESSION – specify the allowed number of data blocks read in a user session, including blocks read from both memory and disk.
+
+LOGICAL_READS_PER_CALL – specify the allowed number of data blocks read for a call to process a SQL statement.
+PRIVATE_SGA – specify the amount of private memory space that a session can allocate in the shared pool of the system global area (SGA).
+
+COMPOSITE_LIMIT – specify the total resource cost for a session, expressed in service units. The total service units are calculated as a weighted sum of CPU_PER_SESSION, CONNECT_TIME, LOGICAL_READS_PER_SESSION, and PRIVATE_SGA.
+password_parameters
+
+		You use the following clauses to set the limits for password parameters:
+
+FAILED_LOGIN_ATTEMPTS – Specify the number of consecutive failed login attempts before the user is locked. The default is 10 times.
+PASSWORD_LIFE_TIME – specify the number of days that a user can use the same password for authentication. The default value is 180 days.
+PASSWORD_REUSE_TIME – specify the number of days before a user can reuse a password.
+PASSWORD_REUSE_MAX – specify the number of password changes required before the current password can be reused. Note that you must set values for both PASSWORD_REUSE_TIME and PASSWORD_REUSE_MAX parameters make these parameters take effect.
+PASSWORD_LOCK_TIME – specify the number of days that Oracle will lock an account after a specified number of a consecutive failed login. The default is 1 day if you omit this clause.
+PASSWORD_GRACE_TIME – specify the number of days after the grace period starts during which a warning is issued and login is allowed. The default is 7 days when you omit this clause.
+
+
+**********************************************************************************
+
+
+	CREATE PROFILE PROG LIMIT PASSWORD_LIFE_TIME 1 PASSWORD_GRACE_TIME 1  PASSWORD_REUSE_MAX 4 PASSWORD_REUSE_TIME 4  FAILED_LOGIN_ATTEMPTS 2 PASSWORD_LOCK_TIME 1  PASSWORD_VERIFY_FUNCTION NULL;
+
+OR,
+
+CREATE PROFILE PROG LIMIT  
+PASSWORD_LIFE_TIME 1 
+PASSWORD_GRACE_TIME 1  
+PASSWORD_REUSE_MAX 4 
+PASSWORD_REUSE_TIME 3  
+FAILED_LOGIN_ATTEMPTS 2 
+PASSWORD_LOCK_TIME 1  
+PASSWORD_VERIFY_FUNCTION ora12c_verify_function;
+
+alter profile prog limit PASSWORD_VERIFY_FUNCTION ora12c_verify_function; PASSWORD_LIFE_TIME 2; 
+
+/* after make the changes in ora12c_verify_function, you have to recreate that profile, else just make alter in that profile */
+
+Profile created.
+
+/* Now create a New User */
+
+SQL> CREATE USER ram IDENTIFIED BY ram DEFAULT TABLESPACE users  QUOTA 2M ON users ACCOUNT UNLOCK PROFILE PROG;
+
+OR
+
+ALTER USER raj PROFILE PROG;
+
+/* after make the changes in ora12c_verify_function, you have to just make alter in that particular user profile */
+
+SQL> col USERNAME for a10
+SQL> col PROFILE for a10
+
+/* to check that user got the paricular profile or not */
+SQL> select USERNAME, PROFILE from dba_users where username='KRISH';
+
+USERNAME		PROFILE
+------------	--------
+KRISH		PROG
+
+
+
+
+
+
+SQL> SELECT RESOURCE_NAME,LIMIT FROM DBA_PROFILES WHERE PROFILE='PROG2' AND RESOURCE_NAME LIKE '%PASSWORD%';
+
+RESOURCE_NAME                    LIMIT                                                              
+-------------------------------- --------------------                                               
+PASSWORD_LIFE_TIME               7                                                                  
+PASSWORD_REUSE_TIME              UNLIMITED                                                          
+PASSWORD_REUSE_MAX               2                                                                  
+PASSWORD_VERIFY_FUNCTION   	 ora12c_verify_function                 
+PASSWORD_LOCK_TIME               1                                                                  
+PASSWORD_GRACE_TIME              3                                                                  
+
+6 rows selected.
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+NOTE: The "ora12c_verify_function" function will be set in a particular file and whose location is "/u01/app/oracle/product/12.2.0/dbhome_1/rdbms/admin" and file name will be "utlpwdmg.sql"
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+SQL> ALTER USER KRISH PROFILE PROG;
+
+User altered.
+
+SQL> ALTER USER KRISH IDENTIFIED BY KRISH;
+ALTER USER KRISH IDENTIFIED BY KRISH
+*
+ERROR at line 1:
+ORA-28003: password verification for the specified password failed 
+ORA-20001: Password length less than 8
+
+
+SQL> ALTER USER KRISH IDENTIFIED BY KRISH123;
+
+User altered.
+
+SQL> ALTER USER KRISH IDENTIFIED BY KRISH123;
+ALTER USER KRISH IDENTIFIED BY KRISH123
+*
+ERROR at line 1:
+ORA-28007: the password cannot be reused 
+
+
+/* Want to drop a particular profile */
+
+SQL> drop profile prog2;
+
+Profile dropped.
+
+SQL> DROP USER KRISH;
+DROP USER KRISH
+*
+ERROR at line 1:
+ORA-01922: CASCADE must be specified to drop 'KRISH' 
+
+
+SQL> DROP USER KRISH CASCADE;
+
+User dropped.
+
+SQL> 
+SQL> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
